@@ -1,3 +1,3 @@
 [submodule "LoggerManager"]
 	path = LoggerManager
-	url = git@github.com:UbiquitousPhoton/LoggerManager.git
+	url = https://github.com/UbiquitousPhoton/LoggerManager.git
