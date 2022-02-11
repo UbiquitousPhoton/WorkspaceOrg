@@ -103,8 +103,6 @@ class WindowRule:
         self.size_x = size_x
         self.size_y = size_y
 
-        self.flags = 0
-
     def set_win_type(self, win_type):
         self.win_type = win_type;
 
@@ -379,10 +377,7 @@ class XWindowManager:
                 raise ConfigError("Unknown Size_y ({}) in {} rule".format(rule_sizey,
                                                                           item))
 
-            rule_flags = config['Apps'][item].get("Flags", {})
-
-            new_rule = WindowRule(item, rule_desktop, rule_posx, rule_posy, rule_sizex, rule_sizey,
-                                  rule_flags)
+            new_rule = WindowRule(item, rule_desktop, rule_posx, rule_posy, rule_sizex, rule_sizey)
 
             if rule_type:
                 new_rule.set_win_type(rule_type)
