@@ -29,7 +29,7 @@ import toml
 import sys
 from subprocess import Popen, PIPE
 from shlex import split
-import LoggerManager.loggermanager as loggermanager
+from LoggerManager.loggermanager import Logger_Manager, Loglevel
 from exceptions import *
 from enum import Flag, auto
 from datetime import datetime
@@ -152,10 +152,10 @@ class XWindowManager:
         (shell_stdout, shell_stderr) = shell_process.communicate()
 
         if shell_process.returncode != expected_result:
-            self.logger_manager.log(loggermanager.Loglevel.INFO,
+            self.logger_manager.log(Loglevel.INFO,
                                     "{} returned {}".format(exec_string,
                                                             shell_process.returncode))
-            logger_manager.log(loggermanager.Loglevel.INFO,
+            logger_manager.log(Loglevel.INFO,
                                "stderr: {}".format(shell_stderr.decode("UTF-8")))
             return False, shell_stdout.decode("utf-8")
 
@@ -168,7 +168,7 @@ class XWindowManager:
         """
         for win_type in self.win_dict:
             for win in self.win_dict[win_type]:
-                self.logger_manager.log(loggermanager.Loglevel.INFO, win)
+                self.logger_manager.log(Loglevel.INFO, win)
 
     def has_win(self, win_type, win_handle):
         """
@@ -194,12 +194,12 @@ class XWindowManager:
             for win in self.win_dict[win_type]:
                 if win.win_handle == win_handle:
                     if win.update(desktop, pos_x, pos_y, size_x, size_y, description):
-                        self.logger_manager.log(loggermanager.Loglevel.INFO,
+                        self.logger_manager.log(Loglevel.INFO,
                                                 "updating {} : {}".format(win_handle, win_type))
                     found = True
 
             if(not found):
-                self.logger_manager.log(loggermanager.Loglevel.INFO, "Adding {} : {}".format(win_handle,
+                self.logger_manager.log(Loglevel.INFO, "Adding {} : {}".format(win_handle,
                                                                                win_type))
                 self.win_dict[win_type].append(XWindow(win_handle, desktop, pos_x, pos_y,
                                                        size_x, size_y,
@@ -270,7 +270,7 @@ class XWindowManager:
         for win_type in self.win_dict:
             for win_count, win in enumerate(self.win_dict[win_type]):
                 if not win.seen:
-                    self.logger_manager.log(loggermanager.Loglevel.DEBUG,
+                    self.logger_manager.log(Loglevel.DEBUG,
                                             "removing {} as not found".format(win.win_handle))
                     self.win_dict[win_type].pop(win_count)
 
@@ -385,7 +385,7 @@ class XWindowManager:
             if rule_description:
                 new_rule.set_win_description(rule_description)
 
-            self.logger_manager.log(loggermanager.Loglevel.INFO,
+            self.logger_manager.log(Loglevel.INFO,
                                     "Adding rule {} - type {}, description {} => {}".format(item,
                                                                                             rule_type,
                                                                                             rule_description,
@@ -402,13 +402,13 @@ class XWindowManager:
         for rule in self.win_rules:
             for win_type in self.win_dict:
                 if win_type.find(rule.win_type) != -1:
-                    self.logger_manager.log(loggermanager.Loglevel.INFO, "found {}".format(rule.win_type))
+                    self.logger_manager.log(Loglevel.INFO, "found {}".format(rule.win_type))
 
                     for win in self.win_dict[win_type]:
                         if rule.description == "" or rule.description in win.description:
 
                             if win.desktop != rule.desktop:
-                                self.logger_manager.log(loggermanager.Loglevel.DEBUG,
+                                self.logger_manager.log(Loglevel.DEBUG,
                                                         "moving {} to {}".format(rule.win_type,
                                                                                  rule.desktop))
 
@@ -424,7 +424,7 @@ class XWindowManager:
                                 win.desktop = rule.desktop
 
                             else:
-                                self.logger_manager.log(loggermanager.Loglevel.DEBUG,
+                                self.logger_manager.log(Loglevel.DEBUG,
                                                         "{} already on {}".format(rule.win_type,
                                                                                      win.desktop))
 
@@ -472,7 +472,7 @@ class XWindowManager:
                                     != size_x or win.size_y != size_y:
 
 
-                                    self.logger_manager.log(loggermanager.Loglevel.INFO,
+                                    self.logger_manager.log(Loglevel.INFO,
                                                             "moving {} to ({}x{}) - size ({}x{})".format(rule.win_type,
                                                                                                          pos_x,
                                                                                                          pos_y,
@@ -508,13 +508,13 @@ def main():
         print("Either --input or --output is required")
         return
 
-    logger_manager = loggermanager.Logger_Manager()
+    logger_manager = Logger_Manager()
 
     if args.verbose:
-        logger_manager.setup_stdout(loggermanager.Loglevel.DEBUG)
+        logger_manager.setup_stdout(Loglevel.DEBUG)
 
     if args.logfile != None:
-        logger_manager.setup_logfile(args.logfile, 2, loggermanager.Loglevel.DEBUG)
+        logger_manager.setup_logfile(args.logfile, 2, Loglevel.DEBUG)
 
     try:
         win_manager = XWindowManager(logger_manager)
@@ -535,14 +535,14 @@ def main():
 
             while time_taken < win_manager.max_run_time:
 
-                logger_manager.log(loggermanager.Loglevel.INFO, "### Loop {} start.".format(loop_counter))
+                logger_manager.log(Loglevel.INFO, "### Loop {} start.".format(loop_counter))
                 loop_counter = loop_counter + 1
 
                 win_manager.get_window_details()
 
                 win_manager.apply_rules()
 
-                logger_manager.log(loggermanager.Loglevel.INFO,
+                logger_manager.log(Loglevel.INFO,
                                    "### Sleeping for {} secs.".format(win_manager.sleep_time))
 
                 sleep(win_manager.sleep_time)
@@ -550,16 +550,16 @@ def main():
                 time_taken = time() - start_time;
 
     except ConfigError as e:
-        logger_manager.log(loggermanager.Loglevel.ERROR, e.GetMessage())
+        logger_manager.log(Loglevel.ERROR, e.GetMessage())
 
     except GenericError as e:
-        logger_manager.log(loggermanager.Loglevel.ERROR, e.GetMessage())
+        logger_manager.log(Loglevel.ERROR, e.GetMessage())
 
     except:
-        logger_manager.log(loggermanager.Loglevel.ERROR, format_exc())
+        logger_manager.log(Loglevel.ERROR, format_exc())
 
     finally:
-        logger_manager.log(loggermanager.Loglevel.INFO, "### Script done.")
+        logger_manager.log(Loglevel.INFO, "### Script done.")
 
 if __name__ == "__main__":
     exit(main())
