@@ -416,8 +416,13 @@ class XWindowManager:
                                     output = self.do_shell_exec("wmctrl -i -r {} -t {}".format(win.win_handle,
                                                                                                rule.desktop))
 
+                                if not success:
+                                    raise GenericError("Moving {} to {} failed : {}".format(win.win_handle,
+                                                                                            rule.desktop,
+                                                                                            output))
+
                                 win.desktop = rule.desktop
-                                # if any output at all, this failed.
+
                             else:
                                 self.logger_manager.log(loggermanager.Loglevel.DEBUG,
                                                         "{} already on {}".format(rule.win_type,
@@ -466,12 +471,6 @@ class XWindowManager:
                                 if win.pos_x != pos_x or win.pos_y != pos_y or win.size_x \
                                     != size_x or win.size_y != size_y:
 
-                                    success, \
-                                        output = self.do_shell_exec("wmctrl -i -r {} -e 0,{},{},{},{}".format(win.win_handle,
-                                                                                                              pos_x,
-                                                                                                              pos_y,
-                                                                                                              size_x,
-                                                                                                              size_y))
 
                                     self.logger_manager.log(loggermanager.Loglevel.INFO,
                                                             "moving {} to ({}x{}) - size ({}x{})".format(rule.win_type,
@@ -479,6 +478,22 @@ class XWindowManager:
                                                                                                          pos_y,
                                                                                                          size_x,
                                                                                                          size_y))
+                                    success, \
+                                        output = self.do_shell_exec("wmctrl -i -r {} -e 0,{},{},{},{}".format(win.win_handle,
+                                                                                                              pos_x,
+                                                                                                              pos_y,
+                                                                                                              size_x,
+                                                                                                              size_y))
+
+                                    if not success:
+                                        raise GenericError("moving {} to ({}x{}) - size ({}x{}) failed : {}".format(rule.win_type,
+                                                                                                                    pos_x,
+                                                                                                                    pos_y,
+                                                                                                                    size_x,
+                                                                                                                    size_y,
+                                                                                                                    output))
+
+
 def main():
 
     parser = argparse.ArgumentParser(description='Move certain window types / descriptions onto specified workspaces')
