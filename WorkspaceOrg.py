@@ -91,6 +91,7 @@ class XWindow:
 
         return changed
 
+
 class WindowRule:
 
     def __init__(self, name, desktop, pos_x, pos_y, size_x, size_y):
@@ -108,6 +109,7 @@ class WindowRule:
 
     def set_win_description(self, win_description):
         self.description = win_description
+
 
 class Desktop:
 
@@ -140,7 +142,6 @@ class XWindowManager:
         self.desktops = {}
         self.logger_manager = logger_manager
 
-
     def do_shell_exec(self, exec_string, expected_result = 0):
 
         """
@@ -161,6 +162,7 @@ class XWindowManager:
 
         else:
             return True, shell_stdout.decode("utf-8")
+
 
     def print(self):
         """
@@ -209,7 +211,6 @@ class XWindowManager:
             self.win_dict[win_type].append(XWindow(win_handle, desktop, pos_x, pos_y, size_x,
                                                    size_y, win_type, description))
 
-
     def get_desktop_details(self):
 
         """
@@ -226,7 +227,6 @@ class XWindowManager:
             desktop_index = int(line_split[0])
             new_desktop = Desktop(desktop_index, line_split[3], line_split[len(line_split) - 1])
             self.desktops[desktop_index] = new_desktop;
-
 
     def get_desktop_index(self, desktop_name):
 
@@ -405,12 +405,24 @@ class XWindowManager:
                     self.logger_manager.log(Loglevel.INFO, "found {}".format(rule.win_type))
 
                     for win in self.win_dict[win_type]:
+
+                        win_demaximised = False
+
                         if rule.description == "" or rule.description in win.description:
 
                             if win.desktop != rule.desktop:
                                 self.logger_manager.log(Loglevel.DEBUG,
                                                         "moving {} to {}".format(rule.win_type,
                                                                                  rule.desktop))
+
+                                # Some DE's will fail to move a window if its maximised, so remove these flags.
+                                success, \
+                                    output = self.do_shell_exec("wmctrl -i -r {} -b remove,maximized_vert,maximized_horz".format(win.win_handle,
+                                                                                                                                 rule.desktop))
+                                if success:
+                                    win_demaximised = True
+                                else:
+                                    raise GenericError("De-maximising {} failed : %s".format(win.win_handle, output))
 
                                 success, \
                                     output = self.do_shell_exec("wmctrl -i -r {} -t {}".format(win.win_handle,
@@ -426,7 +438,7 @@ class XWindowManager:
                             else:
                                 self.logger_manager.log(Loglevel.DEBUG,
                                                         "{} already on {}".format(rule.win_type,
-                                                                                     win.desktop))
+                                                                                  win.desktop))
 
 
 
@@ -478,6 +490,17 @@ class XWindowManager:
                                                                                                          pos_y,
                                                                                                          size_x,
                                                                                                          size_y))
+
+                                    if not win_demaximised:
+                                        # Some DE's will fail to move a window if its maximised, so remove these flags, if we didn't
+                                        # already do this earlier
+                                        success, \
+                                            output = self.do_shell_exec("wmctrl -i -r {} -b remove,maximized_vert,maximized_horz".format(win.win_handle,
+                                                                                                                                         rule.desktop))
+                                        if not success:
+                                            raise GenericError("De-maximising {} failed : %s".format(win.win_handle,
+                                                                                                     output))
+
                                     success, \
                                         output = self.do_shell_exec("wmctrl -i -r {} -e 0,{},{},{},{}".format(win.win_handle,
                                                                                                               pos_x,
