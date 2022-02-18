@@ -330,6 +330,7 @@ class XWindowManager:
         # Global setup variables.
         self.max_run_time = config['Setup'].get("MaxTime", 60)
         self.sleep_time = config['Setup'].get("SleepTime", 5)
+        self.demaximise = config['Setup'].get("Demaximise", False)
 
         programs = config.get("Apps", {})
 
@@ -431,14 +432,15 @@ class XWindowManager:
                                                         "moving {} to {}".format(rule.win_type,
                                                                                  rule.desktop))
 
-                                # Some DE's will fail to move a window if its maximised, so remove these flags.
-                                success, \
-                                    output = self.do_shell_exec("wmctrl -i -r {} -b remove,maximized_vert,maximized_horz".format(win.win_handle,
-                                                                                                                                 rule.desktop))
-                                if success:
-                                    win_demaximised = True
-                                else:
-                                    raise GenericError("De-maximising {} failed : %s".format(win.win_handle, output))
+                                if self.demaximise:
+                                    # Some DE's will fail to move a window if its maximised, so remove these flags.
+                                    success, \
+                                        output = self.do_shell_exec("wmctrl -i -r {} -b remove,maximized_vert,maximized_horz".format(win.win_handle,
+                                                                                                                                     rule.desktop))
+                                    if success:
+                                        win_demaximised = True
+                                    else:
+                                        raise GenericError("De-maximising {} failed : %s".format(win.win_handle, output))
 
                                 success, \
                                     output = self.do_shell_exec("wmctrl -i -r {} -t {}".format(win.win_handle,
@@ -507,7 +509,7 @@ class XWindowManager:
                                                                                                          size_x,
                                                                                                          size_y))
 
-                                    if not win_demaximised:
+                                    if self.demaximise and not win_demaximised:
                                         # Some DE's will fail to move a window if its maximised, so remove these flags, if we didn't
                                         # already do this earlier
                                         success, \
