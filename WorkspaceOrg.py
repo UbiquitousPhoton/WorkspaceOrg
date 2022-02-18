@@ -91,10 +91,15 @@ class XWindow:
 
         return changed
 
+class XWindowFlag(Flag):
+    NONE = 0
+    MAX_HORIZONTAL = auto()
+    MAX_VERTICAL = auto()
+    MAXIMISED = MAX_HORIZONTAL | MAX_VERTICAL
 
 class WindowRule:
 
-    def __init__(self, name, desktop, pos_x, pos_y, size_x, size_y):
+    def __init__(self, name, desktop, pos_x, pos_y, size_x, size_y, flags):
         self.name = name
         self.win_type = ""
         self.description = ""
@@ -103,6 +108,7 @@ class WindowRule:
         self.pos_y = pos_y
         self.size_x = size_x
         self.size_y = size_y
+        self.flags = flags
 
     def set_win_type(self, win_type):
         self.win_type = win_type;
@@ -377,7 +383,17 @@ class XWindowManager:
                 raise ConfigError("Unknown Size_y ({}) in {} rule".format(rule_sizey,
                                                                           item))
 
-            new_rule = WindowRule(item, rule_desktop, rule_posx, rule_posy, rule_sizex, rule_sizey)
+            flags = XWindowFlag.NONE
+            rule_flags = config['Apps'][item].get("Flags", "")
+
+            if rule_flags.lower() == "maximised" or rule_flags.lower() == "maximized":
+                flags |= XWindowFlag.MAXIMISED
+            if rule_flags.lower() == "maxvertical":
+                flags |= XWindowFlag.MAX_VERTICAL
+            if rule_flags.lower() == "maxhorizontal":
+                flags |= XWindowFlag.MAX_HORIZONTAL
+
+            new_rule = WindowRule(item, rule_desktop, rule_posx, rule_posy, rule_sizex, rule_sizey, flags)
 
             if rule_type:
                 new_rule.set_win_type(rule_type)
@@ -515,6 +531,21 @@ class XWindowManager:
                                                                                                                     size_x,
                                                                                                                     size_y,
                                                                                                                     output))
+                            if rule.flags & XWindowFlag.MAXIMISED:
+
+                                add_flags = ""
+                                if rule.flags & XWindowFlag.MAX_VERTICAL:
+                                    add_flags += ",maximized_vert"
+
+                                if rule.flags & XWindowFlag.MAX_HORIZONTAL:
+                                    add_flags += ",maximized_horiz"
+
+                                success, \
+                                    output = self.do_shell_exec("wmctrl -i -r {} -b add{}".format(win.win_handle,
+                                                                                                  add_flags))
+                                if not success:
+                                    raise GenericError("Maximising {} failed : %s".format(win.win_handle,
+                                                                                          output))
 
 
 def main():
