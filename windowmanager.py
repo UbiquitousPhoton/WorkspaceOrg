@@ -21,7 +21,6 @@
 #   SOFTWARE.
 
 from enum import Flag, auto
-import toml
 from LoggerManager.loggermanager import Logger_Manager, Loglevel
 from utils import *
 from exceptions import *
@@ -42,6 +41,7 @@ class Window:
         self.win_type = win_type
         self.description = description
         self.seen = True
+        self.rule_applied = False
 
     def __str__(self):
         return "Handle : {} | Workspace : {} | Type : {} | Pos {} x {} | Size {} x {} | Desc : {}".format(self.win_handle,
@@ -147,9 +147,12 @@ class WindowManager:
 
     def __init__(self, logger_manager):
         self.win_dict = {}
-        self.win_rules = []
         self.desktops = {}
         self.logger_manager = logger_manager
+        self.config_manager = None
+
+    def set_config_manager(self, config_manager):
+        self.config_manager = config_manager
 
     def print(self):
         """
@@ -188,8 +191,8 @@ class WindowManager:
                     found = True
 
             if(not found):
-                self.logger_manager.log(Loglevel.INFO, "Adding {} : {}".format(win_handle,
-                                                                               win_type))
+                self.logger_manager.log(Loglevel.INFO, "Adding {} : {} ({})".format(win_handle,
+                                                                               win_type, description))
                 self.win_dict[win_type].append(Window(win_handle, desktop, pos_x, pos_y,
                                                        size_x, size_y,
                                                        win_type, description))
@@ -235,6 +238,7 @@ class WindowManager:
         for win_type in self.win_dict:
             for win in self.win_dict[win_type]:
                 win.seen = False
+                win.rule_applied = False
 
         success, output = do_shell_exec("wmctrl -lxG")
 
@@ -299,98 +303,6 @@ class WindowManager:
         with open(dump_file, "w") as file:
             toml.dump(out_dict, file)
 
-    def get_config_options(self, config_file):
-
-        """
-        Get options / rules from the supplied config file.
-        """
-
-        with open(config_file) as file:
-            config = toml.load(file)
-
-        # Global setup variables.
-        self.max_run_time = config['Setup'].get("MaxTime", 60)
-        self.sleep_time = config['Setup'].get("SleepTime", 5)
-        self.demaximise = config['Setup'].get("Demaximise", False)
-
-        programs = config.get("Apps", {})
-
-        if programs is None:
-            raise ConfigError("No app rules in config file")
-
-
-        for item in programs:
-
-            rule_type = config['Apps'][item].get("Type", "")
-            rule_description = config['Apps'][item].get("Description", "")
-
-            if not rule_type and not rule_description:
-                raise ConfigError("Missing type or description entry in {} rule".format(item))
-
-            config_desktop = config['Apps'][item].get("Desktop", -1)
-
-            if type(config_desktop) == int:
-                rule_desktop = config_desktop
-
-                if rule_desktop == -1:
-                    raise ConfigError("Missing desktop entry in {} rule".format(config_desktop,
-                                                                                item))
-            else:
-                rule_desktop = self.get_desktop_index(config_desktop)
-
-                if rule_desktop == -1:
-                    raise ConfigError("Unknown desktop {} in {} rule".format(config_desktop,
-                                                                             item))
-
-            rule_posx = config['Apps'][item].get("Pos_x", -1)
-
-            if type(rule_posx) not in {int, float}:
-                raise ConfigError("Unknown Pos_x ({}) in {} rule".format(rule_posx,
-                                                                         item))
-
-            rule_posy = config['Apps'][item].get("Pos_y", -1)
-
-            if type(rule_posy) not in {int, float}:
-                raise ConfigError("Unknown Pos_y ({}) in {} rule".format(rule_posy,
-                                                                         item))
-
-            rule_sizex = config['Apps'][item].get("Size_x", -1)
-
-            if type(rule_sizex) not in {int, float}:
-                raise ConfigError("Unknown Size_x ({}) in {} rule".format(rule_sizex,
-                                                                          item))
-            rule_sizey = config['Apps'][item].get("Size_y", -1)
-
-            if type(rule_sizey) not in {int, float}:
-                raise ConfigError("Unknown Size_y ({}) in {} rule".format(rule_sizey,
-                                                                          item))
-
-            flags = WindowFlag.NONE
-            rule_flags = config['Apps'][item].get("Flags", "")
-
-            if rule_flags.lower() == "maximised" or rule_flags.lower() == "maximized":
-                flags |= WindowFlag.MAXIMISED
-            if rule_flags.lower() == "maxvertical":
-                flags |= WindowFlag.MAX_VERTICAL
-            if rule_flags.lower() == "maxhorizontal":
-                flags |= WindowFlag.MAX_HORIZONTAL
-
-            new_rule = WindowRule(item, rule_desktop, rule_posx, rule_posy, rule_sizex, rule_sizey,
-                                  flags)
-
-            if rule_type:
-                new_rule.set_win_type(rule_type)
-
-            if rule_description:
-                new_rule.set_win_description(rule_description)
-
-            self.logger_manager.log(Loglevel.INFO,
-                                    "Adding rule {} - type {}, description {} => {}".format(item,
-                                                                                            rule_type,
-                                                                                            rule_description,
-                                                                                            rule_desktop))
-
-            self.win_rules.append(new_rule)
 
     def apply_rules(self):
 
@@ -398,137 +310,142 @@ class WindowManager:
         Apply the rules we got from the config file.
         """
 
-        for rule in self.win_rules:
+        config = self.config_manager.get_active_config()
+
+        for rule in config.win_rules:
             for win_type in self.win_dict:
                 if win_type.find(rule.win_type) != -1:
                     self.logger_manager.log(Loglevel.INFO, "found {}".format(rule.win_type))
 
                     for win in self.win_dict[win_type]:
 
-                        win_demaximised = False
+                        if not win.rule_applied:
 
-                        if rule.description == "" or rule.description in win.description:
+                            if rule.description == "" or rule.description in win.description:
 
-                            if win.desktop != rule.desktop:
-                                self.logger_manager.log(Loglevel.DEBUG,
-                                                        "moving {} to {}".format(rule.win_type,
-                                                                                 rule.desktop))
+                                win_demaximised = False
+                                win.rule_applied = True
 
-                                if self.demaximise:
-                                    # Some DE's will fail to move a window if its maximised, so remove these flags.
-                                    success, \
-                                        output = do_shell_exec("wmctrl -i -r {} -b remove,maximized_vert,maximized_horz".format(win.win_handle,
-                                                                                                                                     rule.desktop))
-                                    if success:
-                                        win_demaximised = True
-                                    else:
-                                        raise GenericError("De-maximising {} failed : %s".format(win.win_handle,
-                                                                                                 output))
+                                if win.desktop != rule.desktop:
+                                    self.logger_manager.log(Loglevel.DEBUG,
+                                                            "moving {} to {}".format(rule.win_type,
+                                                                                     rule.desktop))
 
-                                success, \
-                                    output = do_shell_exec("wmctrl -i -r {} -t {}".format(win.win_handle,
-                                                                                               rule.desktop))
-
-                                if not success:
-                                    raise GenericError("Moving {} to {} failed : {}".format(win.win_handle,
-                                                                                            rule.desktop,
-                                                                                            output))
-
-                                win.desktop = rule.desktop
-
-                            else:
-                                self.logger_manager.log(Loglevel.DEBUG,
-                                                        "{} already on {}".format(rule.win_type,
-                                                                                  win.desktop))
-
-
-
-                            # Get desktop to work out absolute sizes (if required)
-                            desktop_width = self.desktops[win.desktop].width
-                            desktop_height = self.desktops[win.desktop].height
-
-                            if type(rule.pos_x) == float:
-                                if rule.pos_x >= 0.0:
-                                    pos_x = int(desktop_width * rule.pos_x) + 4
-                                else:
-                                    pos_x = -1
-                            else:
-                                pos_x = rule.pos_x
-
-                            if type(rule.pos_y) == float:
-                                if rule.pos_y >= 0.0:
-                                    pos_y = int(desktop_height * rule.pos_y) + 4
-                                else:
-                                    pos_y = -1
-                            else:
-                                pos_y = rule.pos_y
-
-                            if type(rule.size_x) == float:
-                                if rule.size_x >= 0.0:
-                                    size_x = int(desktop_width * rule.size_x) - 8
-                                else:
-                                    size_x = -1
-                            else:
-                                size_x = rule.size_x
-
-                            if type(rule.size_y) == float:
-                                if rule.size_y >= 0.0:
-                                    size_y = int(desktop_height * rule.size_y) - 8
-                                else:
-                                    size_y = -1
-                            else:
-                                size_y = rule.size_y
-
-                            if pos_x != -1 or pos_y != -1 or \
-                                size_x != -1 or size_y != -1:
-                                if win.pos_x != pos_x or win.pos_y != pos_y or win.size_x \
-                                    != size_x or win.size_y != size_y:
-
-
-                                    self.logger_manager.log(Loglevel.INFO,
-                                                            "moving {} to ({}x{}) - size ({}x{})".format(rule.win_type,
-                                                                                                         pos_x,
-                                                                                                         pos_y,
-                                                                                                         size_x,
-                                                                                                         size_y))
-
-                                    if self.demaximise and not win_demaximised:
-                                        # Some DE's will fail to move a window if its maximised, so remove these flags, if we didn't
-                                        # already do this earlier
+                                    if config.demaximise:
+                                        # Some DE's will fail to move a window if its maximised, so remove these flags.
                                         success, \
                                             output = do_shell_exec("wmctrl -i -r {} -b remove,maximized_vert,maximized_horz".format(win.win_handle,
                                                                                                                                          rule.desktop))
-                                        if not success:
+                                        if success:
+                                            win_demaximised = True
+                                        else:
                                             raise GenericError("De-maximising {} failed : %s".format(win.win_handle,
                                                                                                      output))
 
                                     success, \
-                                        output = do_shell_exec("wmctrl -i -r {} -e 0,{},{},{},{}".format(win.win_handle,
-                                                                                                              pos_x,
-                                                                                                              pos_y,
-                                                                                                              size_x,
-                                                                                                              size_y))
+                                        output = do_shell_exec("wmctrl -i -r {} -t {}".format(win.win_handle,
+                                                                                                   rule.desktop))
 
                                     if not success:
-                                        raise GenericError("moving {} to ({}x{}) - size ({}x{}) failed : {}".format(rule.win_type,
-                                                                                                                    pos_x,
-                                                                                                                    pos_y,
-                                                                                                                    size_x,
-                                                                                                                    size_y,
-                                                                                                                    output))
-                            if rule.flags & WindowFlag.MAXIMISED:
+                                        raise GenericError("Moving {} to {} failed : {}".format(win.win_handle,
+                                                                                                rule.desktop,
+                                                                                                output))
 
-                                add_flags = ""
-                                if rule.flags & WindowFlag.MAX_VERTICAL:
-                                    add_flags += ",maximized_vert"
+                                    win.desktop = rule.desktop
 
-                                if rule.flags & WindowFlag.MAX_HORIZONTAL:
-                                    add_flags += ",maximized_horiz"
+                                else:
+                                    self.logger_manager.log(Loglevel.DEBUG,
+                                                            "{} already on {}".format(rule.win_type,
+                                                                                      win.desktop))
 
-                                success, \
-                                    output = do_shell_exec("wmctrl -i -r {} -b add{}".format(win.win_handle,
-                                                                                                  add_flags))
-                                if not success:
-                                    raise GenericError("Maximising {} failed : %s".format(win.win_handle,
-                                                                                          output))
+
+
+                                # Get desktop to work out absolute sizes (if required)
+                                desktop_width = self.desktops[win.desktop].width
+                                desktop_height = self.desktops[win.desktop].height
+
+                                if type(rule.pos_x) == float:
+                                    if rule.pos_x >= 0.0:
+                                        pos_x = int(desktop_width * rule.pos_x) + 4
+                                    else:
+                                        pos_x = -1
+                                else:
+                                    pos_x = rule.pos_x
+
+                                if type(rule.pos_y) == float:
+                                    if rule.pos_y >= 0.0:
+                                        pos_y = int(desktop_height * rule.pos_y) + 4
+                                    else:
+                                        pos_y = -1
+                                else:
+                                    pos_y = rule.pos_y
+
+                                if type(rule.size_x) == float:
+                                    if rule.size_x >= 0.0:
+                                        size_x = int(desktop_width * rule.size_x) - 8
+                                    else:
+                                        size_x = -1
+                                else:
+                                    size_x = rule.size_x
+
+                                if type(rule.size_y) == float:
+                                    if rule.size_y >= 0.0:
+                                        size_y = int(desktop_height * rule.size_y) - 8
+                                    else:
+                                        size_y = -1
+                                else:
+                                    size_y = rule.size_y
+
+                                if pos_x != -1 or pos_y != -1 or \
+                                    size_x != -1 or size_y != -1:
+                                    if win.pos_x != pos_x or win.pos_y != pos_y or win.size_x \
+                                        != size_x or win.size_y != size_y:
+
+
+                                        self.logger_manager.log(Loglevel.INFO,
+                                                                "moving {} to ({}x{}) - size ({}x{})".format(rule.win_type,
+                                                                                                             pos_x,
+                                                                                                             pos_y,
+                                                                                                             size_x,
+                                                                                                             size_y))
+
+                                        if config.demaximise and not win_demaximised:
+                                            # Some DE's will fail to move a window if its maximised, so remove these flags, if we didn't
+                                            # already do this earlier
+                                            success, \
+                                                output = do_shell_exec("wmctrl -i -r {} -b remove,maximized_vert,maximized_horz".format(win.win_handle,
+                                                                                                                                             rule.desktop))
+                                            if not success:
+                                                raise GenericError("De-maximising {} failed : %s".format(win.win_handle,
+                                                                                                         output))
+
+                                        success, \
+                                            output = do_shell_exec("wmctrl -i -r {} -e 0,{},{},{},{}".format(win.win_handle,
+                                                                                                                  pos_x,
+                                                                                                                  pos_y,
+                                                                                                                  size_x,
+                                                                                                                  size_y))
+
+                                        if not success:
+                                            raise GenericError("moving {} to ({}x{}) - size ({}x{}) failed : {}".format(rule.win_type,
+                                                                                                                        pos_x,
+                                                                                                                        pos_y,
+                                                                                                                        size_x,
+                                                                                                                        size_y,
+                                                                                                                        output))
+                                if rule.flags & WindowFlag.MAXIMISED:
+
+                                    add_flags = ""
+                                    if rule.flags & WindowFlag.MAX_VERTICAL:
+                                        add_flags += ",maximized_vert"
+
+                                    if rule.flags & WindowFlag.MAX_HORIZONTAL:
+                                        add_flags += ",maximized_horiz"
+
+                                    success, \
+                                        output = do_shell_exec("wmctrl -i -r {} -b add{}".format(win.win_handle,
+                                                                                                      add_flags))
+                                    if not success:
+                                        raise GenericError("Maximising {} failed : %s".format(win.win_handle,
+                                                                                              output))
 

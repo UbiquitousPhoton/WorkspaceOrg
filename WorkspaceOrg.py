@@ -26,6 +26,7 @@ import argparse
 
 from windowmanager import *
 from hardwaremanager import *
+from configmanager import ConfigManager
 
 from LoggerManager.loggermanager import Logger_Manager, Loglevel
 from exceptions import *
@@ -51,44 +52,49 @@ def main():
     logger_manager = Logger_Manager()
 
     if args.verbose:
-        logger_manager.setup_stdout(Loglevel.DEBUG)
+        logger_manager.setup_stdout(Loglevel.INFO)
 
     if args.logfile != None:
         logger_manager.setup_logfile(args.logfile, 2, Loglevel.INFO)
 
     try:
-        win_manager = WindowManager(logger_manager)
+        window_manager = WindowManager(logger_manager)
         hardware_manager = HardwareManager(logger_manager)
+        config_manager = ConfigManager(logger_manager, window_manager)
+
+        window_manager.set_config_manager(config_manager)
 
         hardware_manager.get_hardware_setup()
 
-        win_manager.get_desktop_details()
+        window_manager.get_desktop_details()
 
         if args.output != None:
-            win_manager.get_window_details()
-            win_manager.dump_window_details(args.output)
+            window_manager.get_window_details()
+            window_manager.dump_window_details(args.output)
 
         if args.input != None:
 
-            win_manager.get_config_options(args.input)
+            config_manager.get_config_options(args.input)
+
+            config = config_manager.get_active_config()
 
             start_time = time()
             time_taken = 0.0
             loop_counter = 0
 
-            while time_taken < win_manager.max_run_time:
+            while time_taken < config.max_run_time:
 
                 logger_manager.log(Loglevel.INFO, "### Loop {} start.".format(loop_counter))
                 loop_counter = loop_counter + 1
 
-                win_manager.get_window_details()
+                window_manager.get_window_details()
 
-                win_manager.apply_rules()
+                window_manager.apply_rules()
 
                 logger_manager.log(Loglevel.INFO,
-                                   "### Sleeping for {} secs.".format(win_manager.sleep_time))
+                                   "### Sleeping for {} secs.".format(config.sleep_time))
 
-                sleep(win_manager.sleep_time)
+                sleep(config.sleep_time)
 
                 time_taken = time() - start_time;
 
