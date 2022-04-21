@@ -25,6 +25,7 @@
 import argparse
 
 from windowmanager import *
+from hardwaremanager import *
 
 from LoggerManager.loggermanager import Logger_Manager, Loglevel
 from exceptions import *
@@ -57,6 +58,9 @@ def main():
 
     try:
         win_manager = WindowManager(logger_manager)
+        hardware_manager = HardwareManager(logger_manager)
+
+        hardware_manager.get_hardware_setup()
 
         win_manager.get_desktop_details()
 
