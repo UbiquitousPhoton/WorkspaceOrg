@@ -21,6 +21,7 @@
 #   SOFTWARE.
 
 from enum import Flag, auto
+import toml
 from LoggerManager.loggermanager import Logger_Manager, Loglevel
 from utils import *
 from exceptions import *
