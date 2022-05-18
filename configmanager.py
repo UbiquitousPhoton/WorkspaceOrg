@@ -38,9 +38,13 @@ class Config:
         self.demaximise = demaximise
 
         self.win_rules = []
+        self.commands = []
 
     def add_rule(self, rule):
         self.win_rules.append(rule)
+
+    def add_command(self, cmd):
+        self.commands.append(cmd)
 
 class ConfigManager:
 
@@ -148,3 +152,15 @@ class ConfigManager:
 
            self.config.add_rule(new_rule)
 
+
+       # Commands to be launched
+       commands = config.get("Commands", {})
+
+       for cmd_name in commands:
+           cmd = config['Commands'][cmd_name].get("Command", "")
+           if not cmd:
+               raise ConfigError("Missing Command entry in {} command".format(cmd_name))
+
+           self.logger_manager.log(Loglevel.INFO,
+                                   "Adding command {} - {}".format(cmd_name, cmd))
+           self.config.add_command(cmd)

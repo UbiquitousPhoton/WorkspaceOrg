@@ -27,6 +27,7 @@ import argparse
 from windowmanager import *
 from hardwaremanager import *
 from configmanager import ConfigManager
+from commandmanager import CommandManager
 
 from LoggerManager.loggermanager import Logger_Manager, Loglevel
 from exceptions import *
@@ -61,8 +62,10 @@ def main():
         window_manager = WindowManager(logger_manager)
         hardware_manager = HardwareManager(logger_manager)
         config_manager = ConfigManager(logger_manager, window_manager)
+        command_manager = CommandManager(logger_manager)
 
         window_manager.set_config_manager(config_manager)
+        command_manager.set_config_manager(config_manager)
 
         hardware_manager.get_hardware_setup()
 
@@ -97,6 +100,8 @@ def main():
                 sleep(config.sleep_time)
 
                 time_taken = time() - start_time;
+
+            command_manager.launch()
 
     except ConfigError as e:
         logger_manager.log(Loglevel.ERROR, e.GetMessage())
