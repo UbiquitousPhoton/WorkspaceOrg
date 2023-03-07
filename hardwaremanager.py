@@ -113,3 +113,9 @@ class HardwareManager:
 
                 waiting_edid = False
 
+    def __str__(self):
+        s = ""
+        for (k, v) in self.monitors.items():
+            s += "Monitor - " + v.__str__() + "\n"
+        return s
+

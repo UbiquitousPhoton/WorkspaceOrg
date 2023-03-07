@@ -68,6 +68,8 @@ def main():
         command_manager.set_config_manager(config_manager)
 
         hardware_manager.get_hardware_setup()
+        logger_manager.log(Loglevel.INFO, "### Hardware configuration")
+        logger_manager.log(Loglevel.INFO, "{}".format(hardware_manager))
 
         window_manager.get_desktop_details()
 
